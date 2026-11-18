@@ -11,6 +11,8 @@ import org.apache.commons.lang3.tuple.Pair;
 import com.adjustclient.game.player.InventoryStateTracker;
 import com.adjustclient.rotation.handler.RotationHandler;
 import com.adjustclient.rotation.InstantRotationModel;
+import com.adjustclient.server.ServerType;
+import com.adjustclient.util.anticheat.ServerTracker;
 
 public class BreakHandler implements MinecraftInstance {
     public final BreakerModule module;
@@ -43,9 +45,19 @@ public class BreakHandler implements MinecraftInstance {
                         samplingFactor, samplingFactor, 3.0F), target.block, pos);
         if (hit == null) return false;
         mc.rightClickDelayTimer = 0;
+        var server = ServerTracker.INSTANCE.serverState;
+        boolean rewound = server != null && server.antiCheatModel != null
+                && server.antiCheatModel.serverType == ServerType.REWOUND;
+        if (rewound && !mc.playerController.isHittingBlock) {
+            setMouseOver(hit.getRight());
+        }
         if (module.hideSwings.isEnabled()) Adjust.mouseClickHelper.left.swing = false;
-        apply(hit.getLeft().angles, hit.getRight(), module.preventInputEnabled.isEnabled(),
-                module.rotations.isEnabled(), module.heldItem.isEnabled());
+        if (rewound) {
+            applyRewound(hit.getLeft().angles, hit.getRight());
+        } else {
+            apply(hit.getLeft().angles, hit.getRight(), module.preventInputEnabled.isEnabled(),
+                    module.rotations.isEnabled(), module.heldItem.isEnabled());
+        }
         return true;
     }
 
@@ -70,10 +82,36 @@ public class BreakHandler implements MinecraftInstance {
     }
 
     public void setMouseOver(MovingObjectPosition hit) {
+        var server = ServerTracker.INSTANCE.serverState;
+        if (server != null && server.antiCheatModel != null
+                && server.antiCheatModel.serverType == ServerType.REWOUND
+                && mc.thePlayer.isUsingItem()) {
+            module.hold.acquire(module.hold.field16);
+        }
         Adjust.mouseClickHelper.right.disabled = true;
         Adjust.mouseClickHelper.left.disabled = true;
         WorldUtil.setMouseOver(hit);
-        com.adjustclient.util.anticheat.ServerTracker.INSTANCE.mouseOverOverridden = true;
+        ServerTracker.INSTANCE.mouseOverOverridden = true;
+    }
+
+    public void applyRewound(Vec2f angles, MovingObjectPosition hit) {
+        if (mc.playerController.isHittingBlock) {
+            if (willFinish(hit.getBlockPos(), false)) {
+                selectTool(false);
+                setMouseOver(hit);
+            }
+            mc.sendClickBlockToControllerAt(mc.leftClickCounter == 0, hit);
+            if (target != null && willFinish(hit.getBlockPos(), true)) rotation = angles;
+        } else {
+            mc.thePlayer.sendQueue.netManager.protocolAdapter.interactionHandler.swingAndRun(
+                    mc.thePlayer, com.adjustclient.protocol.type.SwingReason.DIGGING,
+                    () -> {
+                        if (mc.theWorld.getBlockState(hit.getBlockPos()).getBlock().getMaterial() != Material.air) {
+                            mc.playerController.clickBlock(hit.getBlockPos(), hit.sideHit);
+                            rotation = angles;
+                        }
+                    });
+        }
     }
 
     public boolean willFinish(BlockPos pos, boolean simulate) {

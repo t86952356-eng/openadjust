@@ -11,7 +11,7 @@ public final class RewoundNoFallMode extends NoFallMode {
         super(module, "Rewound");
     }
 
-    @EventHandler
+    @EventHandler(priority = -6)
     public void onMotion(MotionEvent event) {
         if (!isActive() || !event.pre || !module.canUse()) return;
         int safeFall = WorldUtil.safeFallDistance(mc.thePlayer);

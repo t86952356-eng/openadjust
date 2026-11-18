@@ -1534,7 +1534,11 @@ public class Minecraft implements IThreadListener, IPlayerUsage
 
         AttackInputStageEvent attackEvent;
         com.adjustclient.module.impl.player.breaker.BreakerModule breaker = com.adjustclient.module.impl.player.breaker.BreakerModule.INSTANCE;
-        if (breaker != null && breaker.isEnabled() && breaker.preventInputEnabled.isEnabled() && breaker.tickBreaking())
+        com.adjustclient.util.anticheat.blocker.BlockerState serverState = com.adjustclient.util.anticheat.ServerTracker.INSTANCE != null
+                ? com.adjustclient.util.anticheat.ServerTracker.INSTANCE.serverState : null;
+        boolean onRewound = serverState != null && serverState.antiCheatModel != null
+                && serverState.antiCheatModel.serverType == com.adjustclient.server.ServerType.REWOUND;
+        if (breaker != null && breaker.isEnabled() && !onRewound && breaker.preventInputEnabled.isEnabled() && breaker.tickBreaking())
         {
             attackEvent = new AttackInputStageEvent();
             attackEvent.setCancelled(true);

@@ -13,7 +13,7 @@ public final class SpoofNoFallMode extends NoFallMode {
                     return !(module.mode.getValue() instanceof SpoofNoFallMode);
                 });
     }
-    @EventHandler public void onMotion(MotionEvent event) {
+    @EventHandler(priority = -7) public void onMotion(MotionEvent event) {
         if (!isActive() || !event.pre) return;
         if (noGround.isEnabled()) {
             event.onGround = false;

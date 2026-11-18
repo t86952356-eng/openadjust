@@ -9,6 +9,7 @@ import com.adjustclient.event.WorldResetEvent;
 import com.adjustclient.module.impl.combat.criticals.CriticalsMode;
 import com.adjustclient.module.impl.combat.criticals.CriticalsModule;
 import com.adjustclient.module.impl.movement.flight.FlightModule;
+import com.adjustclient.module.impl.player.breaker.BreakerModule;
 import com.adjustclient.util.DamageUtil;
 
 public final class RewoundCriticalsMode extends CriticalsMode {
@@ -26,7 +27,7 @@ public final class RewoundCriticalsMode extends CriticalsMode {
     @EventHandler
     public void onAttack(AttackEntityEvent event) {
         if (!event.pre || !isEnabled() || !Features.CRITICALS_REWOUND.isAllowed()) return;
-        if (!mc.thePlayer.isSprinting() && serverFallDistance > 0.0D
+        if (!mc.thePlayer.lastReportedOnGround && serverFallDistance > 0.0D
                 && DamageUtil.canCritical(mc.thePlayer, event.entity)) {
             mc.thePlayer.onCriticalHit(event.entity);
         }
@@ -42,23 +43,24 @@ public final class RewoundCriticalsMode extends CriticalsMode {
     public void onWorldReset(WorldResetEvent event) {
         if (!isEnabled()) return;
         offsetApplied = false;
-        jumped = false;
         serverFallDistance = 0.0D;
         lastServerY = 0.0D;
     }
 
-    @EventHandler
+    @EventHandler(priority = -10)
     public void onMotion(MotionEvent event) {
         if (!isEnabled() || !event.pre || !Features.CRITICALS_REWOUND.isAllowed()) return;
         if (FlightModule.INSTANCE.isEnabled()) return;
         double serverY = mc.thePlayer.lastReportedPosY;
-        if (mc.thePlayer.isSprinting() || mc.thePlayer.inWater || mc.thePlayer.isOnLadder() || mc.thePlayer.isInWeb) {
+        if (mc.thePlayer.lastReportedOnGround || mc.thePlayer.inWater || mc.thePlayer.isOnLadder() || mc.thePlayer.isInWeb) {
             serverFallDistance = 0.0D;
         } else if (lastServerY > serverY) {
             serverFallDistance += lastServerY - serverY;
         }
         lastServerY = serverY;
-        if (jumped) {
+        boolean breakingBlock = mc.playerController != null && mc.playerController.getIsHittingBlock()
+                || BreakerModule.INSTANCE != null && BreakerModule.INSTANCE.isEnabled() && BreakerModule.INSTANCE.hasTarget();
+        if (jumped || breakingBlock) {
             offsetApplied = false;
             return;
         }

@@ -14,7 +14,6 @@ import com.adjustclient.setting.BooleanSetting;
 import com.adjustclient.setting.ExpandSetting;
 import com.adjustclient.setting.ModeSetting;
 import com.adjustclient.setting.NumberSetting;
-import com.adjustclient.util.BlockUtil;
 import com.adjustclient.util.DistanceUtil;
 import com.adjustclient.util.MovementUtil;
 import com.adjustclient.util.RotationUtil;
@@ -27,7 +26,6 @@ import com.adjustclient.util.anticheat.entity.TrackedOtherEntity;
 import com.adjustclient.util.anticheat.entity.TrackedThrowable;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.item.EntityEnderPearl;
-import net.minecraft.entity.passive.EntityVillager;
 import net.minecraft.entity.projectile.EntityArrow;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.ItemSword;
@@ -117,22 +115,12 @@ public final class AutoBlockModule extends Module {
     }
 
     public boolean shouldBlock() {
+        boolean breakingOnRewound = BreakerModule.INSTANCE.isBreakingOnRewound();
         if (InventoryStateTracker.isInServersideGui()) return false;
-        MovingObjectPosition hit = mc.objectMouseOver;
-        if (hit != null) {
-            if (mc.playerController.getIsHittingBlock()) return false;
-            if (hit.typeOfHit == MovingObjectPosition.MovingObjectType.ENTITY
-                    && hit.entityHit != null && hit.entityHit.getClass() == EntityVillager.class) return false;
-            if (hit.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK && !mc.thePlayer.movementInput.sneak
-                    && BlockUtil.isInteractable(mc.theWorld.getBlockState(hit.getBlockPos()).getBlock())) return false;
-        }
-        var server = ServerTracker.INSTANCE.serverState;
-        if (server != null && server.antiCheatModel != null
-                && server.antiCheatModel.serverType == ServerType.HYPIXEL
-                && BreakerModule.INSTANCE.isEnabled()
-                && BreakerModule.INSTANCE.handler.target != null) return false;
+        if (!breakingOnRewound && !WorldUtil.canInteract()) return false;
         if (AntiVoidModule.INSTANCE.blink.blinkState != null) return false;
-        return !WorldUtil.isLookingAtBlock(false) && canBlockOnServer() && hasSword(true) && hasThreat(false);
+        return (breakingOnRewound || !WorldUtil.isLookingAtBlock(false))
+                && canBlockOnServer() && canBlockOnRewound() && hasSword(true) && hasThreat(false);
     }
 
     public static boolean canBlockOnServer() {
@@ -143,6 +131,13 @@ public final class AutoBlockModule extends Module {
         if (game.isSpecialState() != 0) return false;
         return game.startTimer != null && !game.ended || game.game == HypixelGame.DUELS
                 || game.game == HypixelGame.THE_HYPIXEL_PIT;
+    }
+
+    public static boolean canBlockOnRewound() {
+        var server = ServerTracker.INSTANCE.serverState;
+        if (server == null || server.antiCheatModel == null
+                || server.antiCheatModel.serverType != ServerType.REWOUND) return true;
+        return !Adjust.rewoundGameTracker.state.isInSpawn();
     }
 
     private static boolean isEntityFacingPlayer(Entity target) {

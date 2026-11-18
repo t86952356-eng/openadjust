@@ -224,7 +224,14 @@ public class PlayerControllerMP
                     block1.onBlockClicked(this.mc.theWorld, loc, this.mc.thePlayer);
                 }
 
-                if (flag && block1.getPlayerRelativeBlockHardness(this.mc.thePlayer, this.mc.thePlayer.worldObj, loc) >= 1.0F)
+                float initialHardness = flag ? block1.getPlayerRelativeBlockHardness(this.mc.thePlayer, this.mc.thePlayer.worldObj, loc) : 0.0F;
+
+                if (this.mc.thePlayer.onGround && !this.mc.thePlayer.lastReportedOnGround)
+                {
+                    initialHardness /= 5.0F;
+                }
+
+                if (flag && initialHardness >= 1.0F)
                 {
                     EventBus.post(new BlockBreakEvent(loc));
 

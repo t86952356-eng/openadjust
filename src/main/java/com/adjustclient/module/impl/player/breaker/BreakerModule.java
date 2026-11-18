@@ -9,8 +9,12 @@ import com.adjustclient.setting.*;
 import com.adjustclient.util.*;
 import java.awt.Color;
 import java.util.function.BooleanSupplier;
+import com.adjustclient.game.packet.PacketHoldHandle;
+import com.adjustclient.game.player.InventoryStateTracker;
 import com.adjustclient.module.impl.combat.killaura.KillAuraModule;
 import com.adjustclient.module.impl.combat.builder.BuilderModule;
+import com.adjustclient.server.ServerType;
+import com.adjustclient.util.anticheat.ServerTracker;
 
 public final class BreakerModule extends Module implements MinecraftInstance {
     public static BreakerModule INSTANCE;
@@ -20,6 +24,7 @@ public final class BreakerModule extends Module implements MinecraftInstance {
     public final BlockBreakTracker tracker;
     public final Cooldown cooldown;
     public final Timer priorityTimer;
+    public final PacketHoldHandle hold;
     public final ModeSetting<BreakerBlock> block;
     public final RenderSettings render;
     public final ExpandSetting preventInput;
@@ -46,6 +51,7 @@ public final class BreakerModule extends Module implements MinecraftInstance {
         cooldown = new Cooldown(0L);
         priorityTimer = new Timer();
         priorityTimer.lastMs = 0L;
+        hold = new PacketHoldHandle(Adjust.outboundPacketQueue);
         block = new ModeSetting<>(this, "Block", BreakerBlock.BED, BreakerBlock.values());
         render = new RenderSettings(this, "Render", new Color(0x78435ad1, true));
         preventInput = new ExpandSetting(this, "Prevent Input");
@@ -116,9 +122,9 @@ public final class BreakerModule extends Module implements MinecraftInstance {
     }
 
     public boolean isBreakingOnRewound() {
-        var server = com.adjustclient.util.anticheat.ServerTracker.INSTANCE.serverState;
+        var server = ServerTracker.INSTANCE.serverState;
         return server != null && server.antiCheatModel != null
-                && server.antiCheatModel.serverType == com.adjustclient.server.ServerType.REWOUND
+                && server.antiCheatModel.serverType == ServerType.REWOUND
                 && handler.target != null && mc.playerController.getIsHittingBlock();
     }
 
@@ -135,15 +141,32 @@ public final class BreakerModule extends Module implements MinecraftInstance {
         return com.adjustclient.render.ColorUtil.withAlpha(color, Math.max(0, Math.min(255, alpha))).getRGB();
     }
 
-    @EventHandler(priority = 61) public void onInput(IngameActionEvent event) {
+    @EventHandler(priority = 76) public void onRewoundInput(IngameActionEvent event) {
         if (!isEnabled()) return;
-        if (breakPriority) Adjust.mouseClickHelper.right.disabled = true;
-        if (preventInputEnabled.isEnabled()) return;
-        if (Adjust.mouseClickHelper.left.disabled || BuilderModule.INSTANCE.blockIn.active) {
-            handler.target = null;
-            handler.samplingFactor = RandomUtil.nextFloat(0.05F, 0.06F);
+        var server = ServerTracker.INSTANCE.serverState;
+        if (server == null || server.antiCheatModel == null
+                || server.antiCheatModel.serverType != ServerType.REWOUND) return;
+        if (handler.target != null && handler.tick()) {
+            event.actionStage = false;
             return;
         }
+        if (handler.target == null && targetFinder.canSearch() && cooldown.isExpired()) {
+            BlockReachCheck target = targetFinder.findTarget();
+            if (target != null) {
+                handler.target = target;
+                handler.samplingFactor = RandomUtil.nextFloat(0.05F, 0.06F);
+                if (handler.tick()) event.actionStage = false;
+            }
+        }
+    }
+
+    @EventHandler(priority = 61) public void onInput(IngameActionEvent event) {
+        if (!isEnabled()) return;
+        var server = ServerTracker.INSTANCE.serverState;
+        if (server != null && server.antiCheatModel != null
+                && server.antiCheatModel.serverType == ServerType.REWOUND) return;
+        if (breakPriority) Adjust.mouseClickHelper.right.disabled = true;
+        if (preventInputEnabled.isEnabled()) return;
         if (tickBreaking()) event.actionStage = false;
     }
 
@@ -179,6 +202,15 @@ public final class BreakerModule extends Module implements MinecraftInstance {
         if (priorityTimer.lastMs + 65L > System.currentTimeMillis()) { event.cancelled = true; return; }
         if (handler.target != null && event.to.yCoord - handler.target.targetPos.getY() >= 2.2)
             event.cancelled = true;
+    }
+
+    @EventHandler public void onUserInputVerification(UserInputVerificationEvent event) {
+        if (!isEnabled()) return;
+        hold.release();
+        if (handler.target != null && !InventoryStateTracker.isInServersideGui()) {
+            event.inputRequested = true;
+            event.inputHandled = true;
+        }
     }
 
     @EventHandler public void onProgressHud(Render2DEvent event) {
@@ -236,10 +268,14 @@ public final class BreakerModule extends Module implements MinecraftInstance {
         synchronized (tracker.pending) { tracker.pending.clear(); }
         tracker.tracked.clear();
         setBreakPriority(false);
+        hold.release();
     }
 
     public String getSuffix() {
         if (!preventInputEnabled.isEnabled()) return null;
+        var server = ServerTracker.INSTANCE.serverState;
+        if (server != null && server.antiCheatModel != null
+                && server.antiCheatModel.serverType == ServerType.REWOUND) return null;
         return breakPriority || priority.getValue() == Priority.BREAK ? "Break" : "Combat";
     }
 
@@ -249,6 +285,7 @@ public final class BreakerModule extends Module implements MinecraftInstance {
         handler.samplingFactor = RandomUtil.nextFloat(0.05F, 0.06F);
         synchronized (tracker.pending) { tracker.pending.clear(); }
         tracker.tracked.clear();
+        hold.release();
     }
 
     @EventHandler public void onBlockCollision(CollisionBoxesEvent event) {

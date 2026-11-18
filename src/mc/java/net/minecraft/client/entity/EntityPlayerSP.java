@@ -54,7 +54,6 @@ import com.adjustclient.event.SprintEvent;
 import com.adjustclient.game.player.InventoryStateTracker;
 import com.adjustclient.module.impl.combat.KnockbackDelayModule;
 import com.adjustclient.module.impl.movement.inventorymove.InventoryMoveModule;
-import com.adjustclient.module.impl.player.fastuse.feature.BlockBreakingFeature;
 import com.adjustclient.module.impl.render.MoreParticlesModule;
 import com.adjustclient.module.impl.render.freecam.FreecamModule;
 import com.adjustclient.module.impl.render.hud.HUDModule;
@@ -234,11 +233,6 @@ public class EntityPlayerSP extends AbstractClientPlayer
 
     private void applyPreMotionState(MotionEvent pre)
     {
-        if (BlockBreakingFeature.INSTANCE != null && BlockBreakingFeature.INSTANCE.isActive() && BlockBreakingFeature.INSTANCE.spoofGround)
-        {
-            pre.onGround = true;
-            BlockBreakingFeature.INSTANCE.spoofGround = false;
-        }
         if (Adjust.inventoryStateTracker != null && (Adjust.inventoryStateTracker.field16 < 3 || Adjust.inventoryStateTracker.open))
         {
             Adjust.inventoryStateTracker.suppressSneak = true;

@@ -40,6 +40,7 @@ import net.minecraft.client.renderer.GlStateManager;
 import com.adjustclient.module.impl.movement.scaffold.ScaffoldModule;
 import com.adjustclient.module.impl.combat.builder.BuilderModule;
 import com.adjustclient.module.impl.movement.sprint.SprintModule;
+import com.adjustclient.module.impl.player.breaker.BreakerModule;
 
 public final class KillAuraModule extends Module {
     public static KillAuraModule INSTANCE;
@@ -147,7 +148,8 @@ public final class KillAuraModule extends Module {
         if (checkSettings) {
             if (settings.holdAttack.isEnabled() && !Mouse.isButtonDown(0)) return false;
             if (settings.disableOnNoWeapon.isEnabled() && !WorldUtil.isHoldingWeapon()) return false;
-            if (settings.disableOnBreakingBlock.isEnabled() && WorldUtil.isLookingAtBlock(true)) return false;
+            if (settings.disableOnBreakingBlock.isEnabled() && WorldUtil.isLookingAtBlock(true)
+                    && !BreakerModule.INSTANCE.isBreakingOnRewound()) return false;
         }
         return GameStateUtil.isActiveUnlessScaffolding();
     }
@@ -207,7 +209,8 @@ public final class KillAuraModule extends Module {
         active = mc.thePlayer != null;
         if (active && settings.holdAttack.isEnabled() && !Mouse.isButtonDown(0)) active = false;
         if (active && settings.disableOnNoWeapon.isEnabled() && !WorldUtil.isHoldingWeapon()) active = false;
-        if (active && settings.disableOnBreakingBlock.isEnabled() && WorldUtil.isLookingAtBlock(true)) active = false;
+        if (active && settings.disableOnBreakingBlock.isEnabled() && WorldUtil.isLookingAtBlock(true)
+                && !BreakerModule.INSTANCE.isBreakingOnRewound()) active = false;
         if (active && ScaffoldModule.INSTANCE.isEnabled() && Boolean.TRUE.equals(ScaffoldModule.INSTANCE.placeReady)) active = false;
         if (active) active = GameStateUtil.isActive();
         if (!active) { targetSelector.attackTarget = null; targetSelector.rotationTarget = null; return; }
