@@ -5,7 +5,7 @@ A complete Java source restoration of the **Adjust Client** for **Minecraft 1.8.
 - **Website:** https://adjust.wtf/
 - **Discord:** https://discord.adjust.wtf/ — come join the community for updates, support, and discussion!
 
-> **Backup / Mirror:** https://git.yxz.st/yxzero/openadjust  
+> **Backup / Mirror:** https://deobf.su/yxzero/openadjust.git  
 > Please bookmark and use this mirror if you can — the main git repo might get hit with a DMCA at any time!
 
 ## Credits
