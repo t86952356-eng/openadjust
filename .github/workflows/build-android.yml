@@ -1,0 +1,101 @@
+name: Build Android Client
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CLIENT_ID: OpenAdjust-Android-v1.0
+  JAR_NAME: OpenAdjust-Android-v1.0.jar
+  JSON_NAME: OpenAdjust-Android-v1.0.json
+  TAG: android-v1.0
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Gradle toolchain)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Show toolchain
+        run: |
+          java -version 2>&1
+          javac -version
+          python3 --version
+
+      - name: Build client from source (Gradle, JDK 21)
+        run: ./gradlew --no-daemon -q jar
+
+      - name: Resolve runtime classpath
+        run: |
+          ./gradlew --no-daemon -q -I android/printcp.init.gradle printRtCp \
+            | grep -E "^(CPITEM|THINJAR)" > rtcp.txt
+          wc -l rtcp.txt
+
+      - name: Package standalone Android jar (strip FCL-provided modules)
+        run: |
+          python3 android/package_android.py \
+            --thin-jar build/libs/adjust-client-1.8.9.jar \
+            --cpfile rtcp.txt \
+            --output "dist/${JAR_NAME}" \
+            --report dist/android-package-report.json
+
+      - name: Smoke test - structure + linkage + boot boundary (FCL classpath order)
+        run: |
+          mkdir -p build/probe
+          javac -encoding UTF-8 -d build/probe android/ProbeAdjust.java
+          BOOT_CP=$(grep -oP 'CPITEM\t\K.*' rtcp.txt \
+            | grep -E "/(lwjgl-3\.3\.3|lwjgl-(glfw|opengl|openal|stb|tinyfd|jemalloc|nanovg|freetype)-3\.3\.3|joml-1\.10\.8)\.jar$" \
+            | tr '\n' ':')
+          test -n "$BOOT_CP"
+          java -Xmx1G -cp "build/probe:${BOOT_CP}dist/${JAR_NAME}" \
+            ProbeAdjust "dist/${JAR_NAME}" "${BOOT_CP}dist/${JAR_NAME}"
+
+      - name: Generate version JSON (FCL Client Version manifest)
+        run: |
+          python3 android/generate_version_json.py \
+            --jar "dist/${JAR_NAME}" \
+            --client-url "https://github.com/${{ github.repository }}/releases/download/${TAG}/${JAR_NAME}" \
+            --id "${CLIENT_ID}" \
+            --out "dist/${JSON_NAME}"
+          cat "dist/${JSON_NAME}"
+
+      - name: Copy install guide
+        run: cp android/RELEASE_NOTES.md dist/INSTALL-FCL.md
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenAdjust-Android-v1.0
+          path: dist/
+          if-no-files-found: error
+
+      - name: Delete previous release (if any)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$TAG" \
+            --title "OpenAdjust 1.0 - Android Client Version (Adjust 1.8.9, full source build)" \
+            --notes-file android/RELEASE_NOTES.md \
+            "dist/${JAR_NAME}" \
+            "dist/${JSON_NAME}" \
+            "dist/INSTALL-FCL.md" \
+            "dist/android-package-report.json"

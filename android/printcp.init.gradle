@@ -1,0 +1,11 @@
+// Init script: print the resolved runtime classpath (for the Android fat-jar packager)
+rootProject {
+    plugins.withId('java') {
+        tasks.register('printRtCp') {
+            doLast {
+                configurations.runtimeClasspath.resolve().sort().each { println "CPITEM\t" + it }
+                println "THINJAR\t" + tasks.jar.archiveFile.get().asFile
+            }
+        }
+    }
+}
